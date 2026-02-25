@@ -20,6 +20,11 @@
                         "type": "command",
                         "command": "{{PYTHON_CMD}} .iflow/hooks/inject-subagent-context.py",
                         "timeout": 30
+                    },
+                    {
+                        "type": "command",
+                        "command": "{{PYTHON_CMD}} .iflow/hooks/hive-coordinator.py --event pre-tool-use",
+                        "timeout": 15
                     }
                 ]
             }
@@ -30,6 +35,11 @@
                     {
                         "type": "command",
                         "command": "{{PYTHON_CMD}} .iflow/hooks/ralph-loop.py",
+                        "timeout": 10
+                    },
+                    {
+                        "type": "command",
+                        "command": "{{PYTHON_CMD}} .iflow/hooks/hive-coordinator.py --event subagent-stop",
                         "timeout": 10
                     }
                 ]

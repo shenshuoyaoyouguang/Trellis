@@ -1,0 +1,132 @@
+# 蜂巢并发代理模式配置
+# Hive Concurrent Agent Mode Configuration
+# 版本: 2.0
+
+# ============================================================
+# 蜂群规模配置
+# ============================================================
+swarm:
+  # 工蜂数量范围 (用于并行任务执行)
+  worker_count:
+    min: 3
+    max: 5
+    default: 3
+  
+  # 雄蜂比例 (验证者数量 / 工蜂数量)
+  drone_ratio: 0.4
+  
+  # 侦察蜂数量 (技术可行性探索)
+  scout_count: 1
+
+# ============================================================
+# 信息素协议配置
+# ============================================================
+pheromone:
+  # 信息素状态文件路径
+  file: .trellis/pheromone.json
+  
+  # 信息素超时时间 (秒)
+  timeout: 300
+  
+  # 心跳间隔 (秒)
+  heartbeat_interval: 30
+  
+  # 信息素类型
+  types:
+    - progress    # 进度信息素
+    - blocker     # 阻塞信息素
+    - completion  # 完成信息素
+    - alert       # 警报信息素
+
+# ============================================================
+# 巢室隔离配置
+# ============================================================
+cell:
+  # 隔离级别: strict (严格) | relaxed (宽松)
+  isolation: strict
+  
+  # 输入边界: explicit (明确声明) | auto (自动检测)
+  input_boundary: explicit
+  
+  # 输出边界: defined (定义格式) | flexible (灵活)
+  output_boundary: defined
+  
+  # 单巢室最大工蜂数量
+  max_workers_per_cell: 1
+  
+  # 巢室生命周期 (秒), 0 表示无限制
+  lifecycle: 0
+
+# ============================================================
+# 雄蜂验证协议
+# ============================================================
+drone:
+  # 验证维度
+  dimensions:
+    technical:
+      - lint
+      - typecheck
+      - test
+    strategic:
+      - requirement_match
+      - architecture_align
+      - risk_assessment
+    security:
+      - vulnerability_scan
+      - permission_check
+      - dependency_audit
+  
+  # 共识评分阈值 (0-100)
+  consensus_threshold: 90
+  
+  # 验证失败后的最大重试次数
+  max_retries: 3
+  
+  # 交叉验证: 是否需要多个雄蜂独立验证
+  cross_validation: true
+
+# ============================================================
+# Worktree 配置 (复用现有配置)
+# ============================================================
+worktree:
+  # worktree 根目录
+  dir: ../trellis-worktrees
+  
+  # 需要复制的文件
+  copy:
+    - .trellis/.developer
+    - .trellis/hive-config.yaml
+  
+  # 验证命令 (Ralph Loop)
+  verify:
+    - pnpm lint
+    - pnpm typecheck
+
+# ============================================================
+# 蜂群节律控制
+# ============================================================
+rhythm:
+  # 任务提交粒度: atomic (原子) | batch (批量)
+  commit_granularity: atomic
+  
+  # 大规模迁徙阈值 (>N 个巢室时创建 feature branch)
+  migration_threshold: 5
+  
+  # 紧急修复模式: 允许直接提交到 main
+  hotfix_mode: false
+
+# ============================================================
+# 日志与追踪
+# ============================================================
+logging:
+  # 信息素痕迹目录
+  trace_dir: .trellis/workspace/hive-traces
+  
+  # 审查报告目录
+  audit_dir: .iflow/hive-audit
+  
+  # 日志级别: debug | info | warn | error
+  level: info
+  
+  # 是否保留历史信息素
+  retain_history: true
