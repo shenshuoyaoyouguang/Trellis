@@ -8,7 +8,7 @@ Loads settings from hive-config.yaml and provides unified access.
 
 Usage:
     from hive_config import HiveConfig
-    
+
     config = HiveConfig.load()
     worker_count = config.worker_count
 """
@@ -58,6 +58,13 @@ class WorkerConfig:
 
 
 @dataclass
+class SwarmConfig:
+    """Swarm settings"""
+    drone_ratio: float = 0.4
+    scout_count: int = 1
+
+
+@dataclass
 class DroneConfig:
     """Drone validator settings"""
     ratio: float = 0.4
@@ -78,7 +85,7 @@ class CellConfig:
 @dataclass
 class HiveConfig:
     """Main hive configuration
-    
+
     Attributes:
         worker_count: Number of workers to spawn
         drone_ratio: Ratio of drones to workers (0.0-1.0)
@@ -93,32 +100,32 @@ class HiveConfig:
     worker: WorkerConfig = field(default_factory=WorkerConfig)
     drone: DroneConfig = field(default_factory=DroneConfig)
     cell: CellConfig = field(default_factory=CellConfig)
-    
+
     @classmethod
     def load(cls, config_path: Optional[Path] = None) -> "HiveConfig":
         """Load configuration from file
-        
+
         Args:
             config_path: Path to config file, defaults to .trellis/hive-config.yaml
-            
+
         Returns:
             HiveConfig instance
         """
         if config_path is None:
             config_path = cls._find_config_path()
-        
+
         if not config_path.exists():
             return cls()  # Return defaults
-        
+
         if not HAS_YAML:
             print("Warning: PyYAML not installed, using default config")
             return cls()
-        
+
         with open(config_path, 'r', encoding='utf-8') as f:
             data = yaml.safe_load(f) or {}
-        
+
         return cls._from_dict(data)
-    
+
     @classmethod
     def _find_config_path(cls) -> Path:
         """Find config file path"""
@@ -129,66 +136,77 @@ class HiveConfig:
                 return config_file
             current = current.parent
         return Path.cwd() / ".trellis" / "hive-config.yaml"
-    
+
     @classmethod
     def _from_dict(cls, data: dict[str, Any]) -> "HiveConfig":
         """Create config from dictionary
-        
+
         Args:
             data: Configuration dictionary
-            
+
         Returns:
             HiveConfig instance
         """
         # Extract nested configs
+        swarm_data = data.get("swarm", {})
         pheromone_data = data.get("pheromone", {})
         worker_data = data.get("worker", {})
         drone_data = data.get("drone", {})
         cell_data = data.get("cell", {})
-        
+        worktree_data = data.get("worktree", {})
+
+        # Handle swarm.worker_count structure
+        swarm_worker_count = swarm_data.get("worker_count", {})
+
         pheromone = PheromoneConfig(
             file=pheromone_data.get("file", ".trellis/pheromone.json"),
             timeout=pheromone_data.get("timeout", 300),
             heartbeat_interval=pheromone_data.get("heartbeat_interval", 30)
         )
-        
+
         worker = WorkerConfig(
-            min_count=worker_data.get("min_count", 2),
-            max_count=worker_data.get("max_count", 5),
-            default_count=worker_data.get("default_count", 3),
+            min_count=swarm_worker_count.get("min", worker_data.get("min_count", 2)),
+            max_count=swarm_worker_count.get("max", worker_data.get("max_count", 5)),
+            default_count=swarm_worker_count.get("default", worker_data.get("default_count", 3)),
             timeout=worker_data.get("timeout", 300),
             max_retries=worker_data.get("max_retries", 3)
         )
-        
+
+        # Get drone ratio from swarm.drone_ratio first, then fallback
+        drone_ratio_from_swarm = swarm_data.get("drone_ratio", 0.4)
+
         drone = DroneConfig(
-            ratio=drone_data.get("ratio", 0.4),
+            ratio=drone_ratio_from_swarm,
             types=drone_data.get("types", ["technical", "strategic", "security"]),
             consensus_threshold=drone_data.get("consensus_threshold", 90),
             max_iterations=drone_data.get("max_iterations", 5)
         )
-        
+
+        # Get worktree base from worktree.dir if available
+        worktree_base = worktree_data.get("dir", cell_data.get("worktree_base", "../trellis-worktrees"))
+
         cell = CellConfig(
             isolation=cell_data.get("isolation", "strict"),
-            worktree_base=cell_data.get("worktree_base", "../trellis-worktrees"),
+            worktree_base=worktree_base,
             max_file_size=cell_data.get("max_file_size", 1024 * 1024),
             archive_after_hours=cell_data.get("archive_after_hours", 24)
         )
-        
+
         config = cls(
             worker_count=data.get("worker_count", worker.default_count),
-            drone_ratio=drone.ratio,
+            drone_ratio=drone_ratio_from_swarm,
             pheromone=pheromone,
             worker=worker,
             drone=drone,
             cell=cell
         )
-        
+
         config.validate()
         return config
-    
+
     def validate(self) -> None:
         """Validate configuration
-        
+
         Raises:
             ConfigValidationError: If validation fails
         """
@@ -198,38 +216,38 @@ class HiveConfig:
                 f"worker_count must be between {self.worker.min_count} and "
                 f"{self.worker.max_count}, got {self.worker_count}"
             )
-        
+
         # Validate drone ratio
         if not 0.0 <= self.drone_ratio <= 1.0:
             raise ConfigValidationError(
                 f"drone_ratio must be between 0.0 and 1.0, got {self.drone_ratio}"
             )
-        
+
         # Validate consensus threshold
         if not 0 <= self.drone.consensus_threshold <= 100:
             raise ConfigValidationError(
                 f"consensus_threshold must be between 0 and 100, "
                 f"got {self.drone.consensus_threshold}"
             )
-        
+
         # Validate isolation level
         if self.cell.isolation not in ("strict", "relaxed"):
             raise ConfigValidationError(
                 f"cell.isolation must be 'strict' or 'relaxed', "
                 f"got {self.cell.isolation}"
             )
-    
+
     def get_drone_count(self) -> int:
         """Calculate number of drones based on worker count and ratio
-        
+
         Returns:
             Number of drones
         """
         return max(1, int(self.worker_count * self.drone_ratio))
-    
+
     def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary
-        
+
         Returns:
             Configuration dictionary
         """
@@ -261,21 +279,21 @@ class HiveConfig:
                 "archive_after_hours": self.cell.archive_after_hours
             }
         }
-    
+
     def save(self, config_path: Optional[Path] = None) -> None:
         """Save configuration to file
-        
+
         Args:
             config_path: Path to save config
         """
         if config_path is None:
             config_path = self._find_config_path()
-        
+
         if not HAS_YAML:
             raise HiveConfigError("PyYAML required to save config")
-        
+
         config_path.parent.mkdir(parents=True, exist_ok=True)
-        
+
         with open(config_path, 'w', encoding='utf-8') as f:
             yaml.dump(self.to_dict(), f, default_flow_style=False, allow_unicode=True)
 
@@ -286,18 +304,18 @@ _config: Optional[HiveConfig] = None
 
 def get_config(reload: bool = False) -> HiveConfig:
     """Get global config instance
-    
+
     Args:
         reload: Force reload from file
-        
+
     Returns:
         HiveConfig instance
     """
     global _config
-    
+
     if _config is None or reload:
         _config = HiveConfig.load()
-    
+
     return _config
 
 
@@ -313,22 +331,22 @@ def main():
     """CLI entry point"""
     import argparse
     import json
-    
+
     parser = argparse.ArgumentParser(description="Hive configuration tool")
     subparsers = parser.add_subparsers(dest="command", help="Subcommands")
-    
+
     # show command
     subparsers.add_parser("show", help="Show current config")
-    
+
     # validate command
     subparsers.add_parser("validate", help="Validate config")
-    
+
     args = parser.parse_args()
-    
+
     if args.command == "show":
         config = get_config()
         print(json.dumps(config.to_dict(), indent=2, ensure_ascii=False))
-    
+
     elif args.command == "validate":
         try:
             config = get_config()
@@ -336,7 +354,7 @@ def main():
             print("Configuration is valid")
         except ConfigValidationError as e:
             print(f"Configuration error: {e}")
-    
+
     else:
         parser.print_help()
 
