@@ -303,6 +303,11 @@ def cmd_create(args: argparse.Namespace) -> int:
         "subtasks": [],
         "relatedFiles": [],
         "notes": "",
+        # Review fields
+        "review_status": "none",
+        "reviewer": None,
+        "reviewed_at": None,
+        "review_comments": [],
     }
 
     _write_json_file(task_json_path, task_data)
@@ -877,6 +882,228 @@ def cmd_set_scope(args: argparse.Namespace) -> int:
 
 
 # =============================================================================
+# Command: request-review
+# =============================================================================
+
+def cmd_request_review(args: argparse.Namespace) -> int:
+    """Request review for a task - set review_status to pending."""
+    repo_root = get_repo_root()
+    target_dir = _resolve_task_dir(args.dir, repo_root) if args.dir else None
+
+    # If no dir provided, try current task
+    if not target_dir:
+        current_task = get_current_task(repo_root)
+        if not current_task:
+            print(colored("Error: No task directory specified and no current task set", Colors.RED))
+            print("Usage: python3 task.py request-review <task-dir>")
+            return 1
+        target_dir = repo_root / current_task
+
+    task_json = target_dir / FILE_TASK_JSON
+    if not task_json.is_file():
+        print(colored(f"Error: task.json not found at {target_dir}", Colors.RED))
+        return 1
+
+    data = _read_json_file(task_json)
+    if not data:
+        return 1
+
+    # Check if task is in reviewable state
+    if data.get("status") not in ("review", "in_progress"):
+        print(colored(f"Warning: Task status is '{data.get('status')}', expected 'review' or 'in_progress'", Colors.YELLOW))
+
+    # Update review status
+    data["review_status"] = "pending"
+    if args.reviewer:
+        data["reviewer"] = args.reviewer
+
+    _write_json_file(task_json, data)
+
+    print(colored("✓ Review requested", Colors.GREEN))
+    print(f"  Task: {data.get('title', data.get('name'))}")
+    print(f"  Status: pending review")
+    if data.get("reviewer"):
+        print(f"  Reviewer: {data['reviewer']}")
+    return 0
+
+
+# =============================================================================
+# Command: review
+# =============================================================================
+
+def cmd_review(args: argparse.Namespace) -> int:
+    """Review a task - approve, reject, or request changes."""
+    repo_root = get_repo_root()
+    target_dir = _resolve_task_dir(args.dir, repo_root)
+
+    if not target_dir:
+        print(colored("Error: Task directory required", Colors.RED))
+        print("Usage: python3 task.py review <task-dir> --approve|--reject|--request-changes")
+        return 1
+
+    task_json = target_dir / FILE_TASK_JSON
+    if not task_json.is_file():
+        print(colored(f"Error: task.json not found at {target_dir}", Colors.RED))
+        return 1
+
+    data = _read_json_file(task_json)
+    if not data:
+        return 1
+
+    # Determine review action
+    review_action = None
+    if args.approve:
+        review_action = "approved"
+    elif args.reject:
+        review_action = "rejected"
+    elif args.request_changes:
+        review_action = "changes_requested"
+    else:
+        print(colored("Error: Must specify --approve, --reject, or --request-changes", Colors.RED))
+        return 1
+
+    # Get reviewer
+    reviewer = args.reviewer or get_developer(repo_root) or "unknown"
+
+    # Update review status
+    data["review_status"] = review_action
+    data["reviewer"] = reviewer
+    data["reviewed_at"] = datetime.now().isoformat()
+
+    # Add review comment if provided
+    if args.comment:
+        comment_entry = {
+            "id": f"comment-{datetime.now().strftime('%Y%m%d%H%M%S')}",
+            "author": reviewer,
+            "content": args.comment,
+            "type": review_action,
+            "created_at": datetime.now().isoformat(),
+        }
+        if "review_comments" not in data:
+            data["review_comments"] = []
+        data["review_comments"].append(comment_entry)
+
+    # Update task status based on review
+    if review_action == "approved":
+        data["status"] = "completed"
+        data["completedAt"] = datetime.now().strftime("%Y-%m-%d")
+    elif review_action == "rejected":
+        data["status"] = "rejected"
+    elif review_action == "changes_requested":
+        data["status"] = "in_progress"
+
+    _write_json_file(task_json, data)
+
+    # Output result
+    action_text = {
+        "approved": "✓ Approved",
+        "rejected": "✗ Rejected",
+        "changes_requested": "↻ Changes Requested",
+    }
+    print(colored(action_text[review_action], Colors.GREEN if review_action == "approved" else Colors.YELLOW))
+    print(f"  Task: {data.get('title', data.get('name'))}")
+    print(f"  Reviewer: {reviewer}")
+    print(f"  Task status: {data['status']}")
+    return 0
+
+
+# =============================================================================
+# Command: add-review-comment
+# =============================================================================
+
+def cmd_add_review_comment(args: argparse.Namespace) -> int:
+    """Add a review comment to a task."""
+    repo_root = get_repo_root()
+    target_dir = _resolve_task_dir(args.dir, repo_root)
+
+    if not target_dir or not args.comment:
+        print(colored("Error: Missing arguments", Colors.RED))
+        print("Usage: python3 task.py add-review-comment <task-dir> <comment>")
+        return 1
+
+    task_json = target_dir / FILE_TASK_JSON
+    if not task_json.is_file():
+        print(colored(f"Error: task.json not found at {target_dir}", Colors.RED))
+        return 1
+
+    data = _read_json_file(task_json)
+    if not data:
+        return 1
+
+    author = args.author or get_developer(repo_root) or "unknown"
+
+    comment_entry = {
+        "id": f"comment-{datetime.now().strftime('%Y%m%d%H%M%S')}",
+        "author": author,
+        "content": args.comment,
+        "type": "comment",
+        "created_at": datetime.now().isoformat(),
+    }
+    if args.file_path:
+        comment_entry["file_path"] = args.file_path
+    if args.line_number:
+        comment_entry["line_number"] = args.line_number
+
+    if "review_comments" not in data:
+        data["review_comments"] = []
+    data["review_comments"].append(comment_entry)
+
+    _write_json_file(task_json, data)
+
+    print(colored("✓ Comment added", Colors.GREEN))
+    return 0
+
+
+# =============================================================================
+# Command: review-status
+# =============================================================================
+
+def cmd_review_status(args: argparse.Namespace) -> int:
+    """Show review status for a task."""
+    repo_root = get_repo_root()
+    target_dir = _resolve_task_dir(args.dir, repo_root) if args.dir else None
+
+    if not target_dir:
+        current_task = get_current_task(repo_root)
+        if not current_task:
+            print(colored("Error: No task directory specified and no current task set", Colors.RED))
+            return 1
+        target_dir = repo_root / current_task
+
+    task_json = target_dir / FILE_TASK_JSON
+    if not task_json.is_file():
+        print(colored(f"Error: task.json not found at {target_dir}", Colors.RED))
+        return 1
+
+    data = _read_json_file(task_json)
+    if not data:
+        return 1
+
+    print(colored("=== Review Status ===", Colors.BLUE))
+    print(f"Task: {data.get('title', data.get('name'))}")
+    print(f"Review Status: {data.get('review_status', 'none')}")
+    if data.get("reviewer"):
+        print(f"Reviewer: {data['reviewer']}")
+    if data.get("reviewed_at"):
+        print(f"Reviewed At: {data['reviewed_at']}")
+
+    # Show comments
+    comments = data.get("review_comments", [])
+    if comments:
+        print()
+        print(colored("Comments:", Colors.CYAN))
+        for c in comments:
+            print(f"  [{c.get('created_at', '')[:10]}] {c.get('author')}: {c.get('content')}")
+            if c.get("file_path"):
+                loc = c["file_path"]
+                if c.get("line_number"):
+                    loc += f":{c['line_number']}"
+                print(f"    📍 {loc}")
+
+    return 0
+
+
+# =============================================================================
 # Command: create-pr (delegates to multi-agent script)
 # =============================================================================
 
@@ -913,6 +1140,57 @@ Usage:
   python3 task.py start <dir>                        Set as current task
   python3 task.py finish                             Clear current task
   python3 task.py set-branch <dir> <branch>          Set git branch for multi-agent
+  python3 task.py set-scope <dir> <scope>            Set scope for PR title
+  python3 task.py create-pr [dir] [--dry-run]        Create PR from task
+  python3 task.py archive <task-name>                Archive completed task
+  python3 task.py list [--mine] [--status <status>]  List tasks
+  python3 task.py list-archive [YYYY-MM]             List archived tasks
+
+Review Commands (GitHub-like):
+  python3 task.py request-review [dir] [--reviewer <name>]  Request review
+  python3 task.py review <dir> --approve|--reject|--request-changes [--comment <text>]
+  python3 task.py add-review-comment <dir> <comment> [--file <path>] [--line <num>]
+  python3 task.py review-status [dir]                        Show review status
+
+Arguments:
+  dev_type: backend | frontend | fullstack | test | docs
+  review_status: none | pending | approved | rejected | changes_requested
+
+List options:
+  --mine, -m           Show only tasks assigned to current developer
+  --status, -s <s>     Filter by status (planning, in_progress, review, completed)
+
+Review options:
+  --approve            Approve the task
+  --reject             Reject the task
+  --request-changes    Request changes to the task
+  --reviewer <name>    Specify reviewer
+  --comment <text>     Add comment with review action
+  --file <path>        Associate comment with file
+  --line <num>         Associate comment with line number
+
+Examples:
+  python3 task.py create "Add login feature" --slug add-login
+  python3 task.py init-context .trellis/tasks/01-21-add-login backend
+  python3 task.py add-context <dir> implement .trellis/spec/backend/auth.md "Auth guidelines"
+  python3 task.py set-branch <dir> task/add-login
+  python3 task.py start .trellis/tasks/01-21-add-login
+  python3 task.py create-pr                          # Uses current task
+  python3 task.py create-pr <dir> --dry-run          # Preview without changes
+  python3 task.py finish
+  python3 task.py archive add-login
+  python3 task.py list                               # List all active tasks
+  python3 task.py list --mine                        # List my tasks only
+  python3 task.py list --mine --status in_progress   # List my in-progress tasks
+
+Review Examples:
+  python3 task.py request-review                      # Request review for current task
+  python3 task.py request-review --reviewer alice     # Request specific reviewer
+  python3 task.py review .trellis/tasks/01-21-login --approve
+  python3 task.py review <dir> --request-changes --comment "Fix error handling"
+  python3 task.py add-review-comment <dir> "Consider edge cases" --file src/auth.ts
+  python3 task.py review-status                       # Show review status
+""")
   python3 task.py set-scope <dir> <scope>            Set scope for PR title
   python3 task.py create-pr [dir] [--dry-run]        Create PR from task
   python3 task.py archive <task-name>                Archive completed task
@@ -1022,6 +1300,32 @@ def main() -> int:
     p_listarch = subparsers.add_parser("list-archive", help="List archived tasks")
     p_listarch.add_argument("month", nargs="?", help="Month (YYYY-MM)")
 
+    # request-review
+    p_request_review = subparsers.add_parser("request-review", help="Request review for task")
+    p_request_review.add_argument("dir", nargs="?", help="Task directory")
+    p_request_review.add_argument("--reviewer", "-r", help="Reviewer name")
+
+    # review
+    p_review = subparsers.add_parser("review", help="Review a task (approve/reject/request changes)")
+    p_review.add_argument("dir", help="Task directory")
+    p_review.add_argument("--approve", action="store_true", help="Approve the task")
+    p_review.add_argument("--reject", action="store_true", help="Reject the task")
+    p_review.add_argument("--request-changes", action="store_true", help="Request changes")
+    p_review.add_argument("--reviewer", "-r", help="Reviewer name")
+    p_review.add_argument("--comment", "-c", help="Review comment")
+
+    # add-review-comment
+    p_add_comment = subparsers.add_parser("add-review-comment", help="Add review comment")
+    p_add_comment.add_argument("dir", help="Task directory")
+    p_add_comment.add_argument("comment", help="Comment text")
+    p_add_comment.add_argument("--file", "-f", dest="file_path", help="Associated file path")
+    p_add_comment.add_argument("--line", "-l", dest="line_number", type=int, help="Line number")
+    p_add_comment.add_argument("--author", "-a", help="Comment author")
+
+    # review-status
+    p_review_status = subparsers.add_parser("review-status", help="Show review status")
+    p_review_status.add_argument("dir", nargs="?", help="Task directory")
+
     args = parser.parse_args()
 
     if not args.command:
@@ -1043,6 +1347,10 @@ def main() -> int:
         "archive": cmd_archive,
         "list": cmd_list,
         "list-archive": cmd_list_archive,
+        "request-review": cmd_request_review,
+        "review": cmd_review,
+        "add-review-comment": cmd_add_review_comment,
+        "review-status": cmd_review_status,
     }
 
     if args.command in commands:

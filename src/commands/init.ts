@@ -195,6 +195,16 @@ After completing this task:
   return content;
 }
 
+interface ReviewComment {
+  id: string;
+  author: string;
+  content: string;
+  type: "comment" | "approval" | "rejection" | "change_request";
+  created_at: string;
+  file_path?: string;
+  line_number?: number;
+}
+
 interface TaskJson {
   id: string;
   name: string;
@@ -210,6 +220,16 @@ interface TaskJson {
   subtasks: { name: string; status: string }[];
   relatedFiles: string[];
   notes: string;
+  // Review fields
+  review_status:
+    | "none"
+    | "pending"
+    | "approved"
+    | "rejected"
+    | "changes_requested";
+  reviewer: string | null;
+  reviewed_at: string | null;
+  review_comments: ReviewComment[];
 }
 
 function getBootstrapTaskJson(
@@ -258,6 +278,11 @@ function getBootstrapTaskJson(
     subtasks,
     relatedFiles,
     notes: `First-time setup task created by trellis init (${projectType} project)`,
+    // Review fields
+    review_status: "none",
+    reviewer: null,
+    reviewed_at: null,
+    review_comments: [],
   };
 }
 
