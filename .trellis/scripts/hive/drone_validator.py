@@ -45,8 +45,8 @@ class ValidationDimension(Enum):
     SECURITY = "security"
 
 
-# Command whitelist for safe execution
-SAFE_COMMANDS = {
+# Default command whitelist for safe execution (fallback if config not available)
+DEFAULT_SAFE_COMMANDS = {
     "pnpm lint": ["pnpm", "lint"],
     "pnpm typecheck": ["pnpm", "typecheck"],
     "pnpm test": ["pnpm", "test"],
@@ -108,6 +108,40 @@ class DroneValidator:
         self.audit_dir.mkdir(parents=True, exist_ok=True)
         self._seed = seed
         self._rng = random.Random(seed)
+        
+        # Load safe commands from configuration
+        self.safe_commands = self._load_safe_commands()
+    
+    def _load_safe_commands(self) -> dict[str, list[str]]:
+        """Load safe commands from configuration file
+        
+        Returns:
+            Dictionary of safe commands
+        """
+        config_path = self.hive_root / "hive-config.yaml"
+        
+        if config_path.exists():
+            try:
+                import yaml
+                with open(config_path, 'r', encoding='utf-8') as f:
+                    data = yaml.safe_load(f) or {}
+                
+                drone_config = data.get("drone", {})
+                safe_commands = drone_config.get("safe_commands")
+                
+                if safe_commands and isinstance(safe_commands, dict):
+                    # Validate each command entry
+                    validated = {}
+                    for cmd_str, cmd_args in safe_commands.items():
+                        if isinstance(cmd_args, list) and len(cmd_args) > 0:
+                            validated[cmd_str] = cmd_args
+                    if validated:
+                        return validated
+            except Exception:
+                pass
+        
+        # Fallback to defaults
+        return DEFAULT_SAFE_COMMANDS.copy()
     
     def _find_hive_root(self) -> Path:
         """Find hive root directory"""
@@ -352,9 +386,190 @@ class DroneValidator:
         }
     
     def _check_architecture_consistency(self, base_path: Path) -> list[dict[str, Any]]:
-        """Check architecture consistency"""
+        """Check architecture consistency
+        
+        Performs multiple checks:
+        1. Directory structure validation
+        2. Module boundary enforcement
+        3. Dependency direction validation
+        
+        Args:
+            base_path: Base path for validation
+            
+        Returns:
+            List of architecture issues found
+        """
         issues: list[dict[str, Any]] = []
-        # Simplified implementation - actual would need more complex analysis
+        
+        # 1. Check standard directory structure
+        structure_issues = self._check_directory_structure(base_path)
+        issues.extend(structure_issues)
+        
+        # 2. Check module boundaries (layered architecture)
+        boundary_issues = self._check_module_boundaries(base_path)
+        issues.extend(boundary_issues)
+        
+        # 3. Check dependency direction (imports should flow downward)
+        dependency_issues = self._check_dependency_direction(base_path)
+        issues.extend(dependency_issues)
+        
+        return issues
+    
+    def _check_directory_structure(self, base_path: Path) -> list[dict[str, Any]]:
+        """Check if standard directories exist"""
+        issues: list[dict[str, Any]] = []
+        
+        # Expected directories for a typical TypeScript project
+        expected_dirs = ["src"]
+        recommended_dirs = ["test", "docs"]
+        
+        for dir_name in expected_dirs:
+            if not (base_path / dir_name).exists():
+                issues.append({
+                    "type": "missing_directory",
+                    "severity": "medium",
+                    "message": f"Expected directory not found: {dir_name}/",
+                    "file": dir_name
+                })
+        
+        for dir_name in recommended_dirs:
+            if not (base_path / dir_name).exists():
+                issues.append({
+                    "type": "missing_recommended_directory",
+                    "severity": "low",
+                    "message": f"Recommended directory not found: {dir_name}/",
+                    "file": dir_name
+                })
+        
+        return issues
+    
+    def _check_module_boundaries(self, base_path: Path) -> list[dict[str, Any]]:
+        """Check module boundaries to prevent unauthorized cross-layer imports"""
+        issues: list[dict[str, Any]] = []
+        
+        src_dir = base_path / "src"
+        if not src_dir.exists():
+            return issues
+        
+        # Define layer hierarchy (lower index = lower layer)
+        layers = {
+            "utils": 0,       # Foundation layer
+            "types": 1,       # Type definitions
+            "constants": 1,   # Constants
+            "config": 2,      # Configuration
+            "templates": 3,   # Templates
+            "commands": 4,    # Command handlers
+            "cli": 5,         # CLI entry point
+        }
+        
+        # Pattern to detect imports
+        import_pattern = re.compile(r'^import\s+.*from\s+[\'"](\.\./+)?(\w+)/')
+        
+        for ts_file in src_dir.rglob("*.ts"):
+            if ts_file.name.endswith(".d.ts"):
+                continue
+            
+            try:
+                file_size = ts_file.stat().st_size
+                if file_size > MAX_FILE_SIZE:
+                    continue
+                
+                content = ts_file.read_text(encoding='utf-8')
+                relative_path = ts_file.relative_to(src_dir)
+                parts = relative_path.parts
+                
+                # Determine current layer
+                current_layer = None
+                if len(parts) >= 2:
+                    current_layer = layers.get(parts[0])
+                
+                if current_layer is None:
+                    continue
+                
+                # Check imports for boundary violations
+                for line in content.split('\n'):
+                    match = import_pattern.match(line.strip())
+                    if match:
+                        imported_module = match.group(2)
+                        imported_layer = layers.get(imported_module)
+                        
+                        # Check if importing from a lower layer is allowed
+                        if imported_layer is not None and imported_layer > current_layer:
+                            issues.append({
+                                "type": "layer_boundary_violation",
+                                "severity": "medium",
+                                "message": f"Lower layer imports higher layer: {parts[0]} -> {imported_module}",
+                                "file": str(relative_path)
+                            })
+                            break  # One violation per file is enough
+                            
+            except Exception:
+                continue
+        
+        return issues
+    
+    def _check_dependency_direction(self, base_path: Path) -> list[dict[str, Any]]:
+        """Check if dependencies follow the correct direction"""
+        issues: list[dict[str, Any]] = []
+        
+        src_dir = base_path / "src"
+        if not src_dir.exists():
+            return issues
+        
+        # Check for circular dependencies (simplified check)
+        # Pattern to detect relative imports
+        import_pattern = re.compile(r'^import\s+.*from\s+[\'"](\.{1,2}/[^\'"]+)[\'"]')
+        
+        file_imports: dict[str, set[str]] = {}
+        
+        for ts_file in src_dir.rglob("*.ts"):
+            if ts_file.name.endswith(".d.ts"):
+                continue
+            
+            try:
+                file_size = ts_file.stat().st_size
+                if file_size > MAX_FILE_SIZE:
+                    continue
+                
+                content = ts_file.read_text(encoding='utf-8')
+                relative_path = str(ts_file.relative_to(src_dir))
+                
+                imports = set()
+                for line in content.split('\n'):
+                    match = import_pattern.match(line.strip())
+                    if match:
+                        imports.add(match.group(1))
+                
+                file_imports[relative_path] = imports
+                
+            except Exception:
+                continue
+        
+        # Check for potential circular imports (A imports B, B imports A)
+        for file_a, imports_a in file_imports.items():
+            for import_path in imports_a:
+                # Normalize import path
+                if import_path.startswith('.'):
+                    # Resolve relative path (simplified)
+                    normalized = import_path.lstrip('./')
+                    if not normalized.endswith('.ts'):
+                        normalized += '.ts'
+                    
+                    # Check if the imported file imports back
+                    if normalized in file_imports:
+                        imports_b = file_imports[normalized]
+                        for import_b in imports_b:
+                            normalized_b = import_b.lstrip('./')
+                            if not normalized_b.endswith('.ts'):
+                                normalized_b += '.ts'
+                            if normalized_b == file_a:
+                                issues.append({
+                                    "type": "circular_dependency",
+                                    "severity": "high",
+                                    "message": f"Circular dependency detected: {file_a} <-> {normalized}",
+                                    "file": file_a
+                                })
+        
         return issues
     
     def _check_code_complexity(self, base_path: Path) -> int:
@@ -481,15 +696,15 @@ class DroneValidator:
         Returns:
             Execution result
         """
-        # Check whitelist
-        if command not in SAFE_COMMANDS:
+        # Check whitelist (using instance variable loaded from config)
+        if command not in self.safe_commands:
             return {
                 "success": False,
                 "output": f"Command not in whitelist: {command}",
                 "returncode": -1
             }
         
-        cmd_args = SAFE_COMMANDS[command]
+        cmd_args = self.safe_commands[command]
         
         try:
             result = subprocess.run(

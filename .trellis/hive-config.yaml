@@ -3,6 +3,60 @@
 # 版本: 2.0
 
 # ============================================================
+# 蜂后调度器配置 (Queen Scheduler)
+# ============================================================
+queen:
+  # 心跳间隔 (秒)
+  heartbeat_interval: 30
+  
+  # 最大并发巢室数
+  max_concurrent_cells: 3
+  
+  # 任务超时时间 (分钟)
+  timeout_minutes: 60
+  
+  # 自动启动衰减监控
+  auto_decay_monitor: true
+
+# ============================================================
+# 工蜂池配置 (Worker Pool)
+# ============================================================
+worker_pool:
+  # 最小工蜂数量
+  min_workers: 2
+  
+  # 最大工蜂数量
+  max_workers: 5
+  
+  # 默认工蜂数量
+  default_workers: 3
+  
+  # 启用任务窃取 (负载均衡)
+  task_stealing: true
+  
+  # 工蜂超时时间 (秒)
+  worker_timeout: 300
+  
+  # 最大重试次数
+  max_retries: 3
+
+# ============================================================
+# 巢室 DAG 执行器配置
+# ============================================================
+dag:
+  # 启用循环依赖检测
+  enable_cycle_detection: true
+  
+  # 并行层限制 (每层最大巢室数)
+  parallel_layer_limit: 5
+  
+  # 启用关键路径分析
+  enable_critical_path: true
+  
+  # DAG 状态持久化
+  persist_state: true
+
+# ============================================================
 # 蜂群规模配置
 # ============================================================
 swarm:
@@ -84,6 +138,17 @@ drone:
   
   # 交叉验证: 是否需要多个雄蜂独立验证
   cross_validation: true
+  
+  # 安全命令白名单 (用于技术验证)
+  # 格式: "命令字符串": ["命令", "参数1", "参数2", ...]
+  safe_commands:
+    "pnpm lint": ["pnpm", "lint"]
+    "pnpm typecheck": ["pnpm", "typecheck"]
+    "pnpm test": ["pnpm", "test"]
+    "pnpm audit": ["pnpm", "audit"]
+    "npm run lint": ["npm", "run", "lint"]
+    "npm run test": ["npm", "run", "test"]
+    "npm run typecheck": ["npm", "run", "typecheck"]
 
 # ============================================================
 # Worktree 配置 (复用现有配置)

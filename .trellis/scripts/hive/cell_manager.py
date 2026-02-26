@@ -20,12 +20,14 @@ import os
 import re
 import shutil
 import subprocess
+import threading
+import time
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Optional
 from dataclasses import dataclass, field
 
-from hive_config import HiveConfig
+from .hive_config import HiveConfig
 
 
 class CellManagerError(Exception):
@@ -51,6 +53,69 @@ class CellAlreadyExistsError(CellManagerError):
 # Input validation patterns
 VALID_CELL_ID_PATTERN = re.compile(r'^[a-zA-Z0-9][a-zA-Z0-9_-]{0,63}$')
 SAFE_PATH_PATTERN = re.compile(r'^[a-zA-Z0-9_./-]+$')
+
+# Maximum retries for handling race conditions
+MAX_CREATION_RETRIES = 3
+RETRY_DELAY_SECONDS = 0.1
+
+
+class CellCreationLock:
+    """Thread-safe lock for cell creation operations
+    
+    Prevents race conditions when multiple threads attempt to create
+    cells with the same ID simultaneously.
+    """
+    
+    _instance: Optional["CellCreationLock"] = None
+    _lock = threading.Lock()
+    
+    def __new__(cls) -> "CellCreationLock":
+        """Singleton pattern for global lock"""
+        if cls._instance is None:
+            with cls._lock:
+                if cls._instance is None:
+                    cls._instance = super().__new__(cls)
+                    cls._instance._creation_locks: dict[str, threading.Lock] = {}
+                    cls._instance._global_lock = threading.Lock()
+        return cls._instance
+    
+    def acquire_cell_lock(self, cell_id: str, timeout: float = 10.0) -> bool:
+        """Acquire lock for cell creation
+        
+        Args:
+            cell_id: Cell ID to lock
+            timeout: Maximum wait time
+            
+        Returns:
+            True if lock acquired
+        """
+        with self._global_lock:
+            if cell_id not in self._creation_locks:
+                self._creation_locks[cell_id] = threading.Lock()
+            lock = self._creation_locks[cell_id]
+        
+        return lock.acquire(timeout=timeout)
+    
+    def release_cell_lock(self, cell_id: str) -> None:
+        """Release lock for cell creation
+        
+        Args:
+            cell_id: Cell ID to unlock
+        """
+        with self._global_lock:
+            lock = self._creation_locks.get(cell_id)
+        
+        if lock:
+            try:
+                lock.release()
+            except RuntimeError:
+                pass  # Lock not held
+    
+    def __enter__(self):
+        return self
+    
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        return False
 
 
 def validate_cell_id(cell_id: str) -> None:
@@ -147,6 +212,35 @@ class CellManager:
         self.cells_dir = self.hive_root / "cells"
         self.project_root = self.hive_root.parent
         self.cells_dir.mkdir(parents=True, exist_ok=True)
+        
+        # Load boundary configuration
+        self._config = HiveConfig.load()
+        self._input_boundary = self._load_boundary_config("input_boundary", "explicit")
+        self._output_boundary = self._load_boundary_config("output_boundary", "defined")
+    
+    def _load_boundary_config(self, key: str, default: str) -> str:
+        """Load boundary configuration from config file
+        
+        Args:
+            key: Configuration key
+            default: Default value
+            
+        Returns:
+            Configuration value
+        """
+        # Check if config has cell section with boundary settings
+        try:
+            # Read from YAML config directly since dataclass doesn't have these fields
+            config_path = self.hive_root / "hive-config.yaml"
+            if config_path.exists():
+                import yaml
+                with open(config_path, 'r', encoding='utf-8') as f:
+                    data = yaml.safe_load(f) or {}
+                cell_config = data.get("cell", {})
+                return cell_config.get(key, default)
+        except Exception:
+            pass
+        return default
 
     def _find_hive_root(self) -> Path:
         """Find hive root directory"""
@@ -188,9 +282,26 @@ class CellManager:
         """
         # Validate inputs
         validate_cell_id(cell_id)
-
+        
+        # Check input boundary configuration
+        if self._input_boundary == "explicit":
+            if not inputs:
+                raise ValidationError(
+                    "Input boundary is set to 'explicit', but no inputs were provided. "
+                    "Please specify input files or change input_boundary config to 'auto'."
+                )
+        
         for inp in inputs:
             validate_path(inp, "input file")
+        
+        # Check output boundary configuration
+        if self._output_boundary == "defined":
+            if not outputs:
+                raise ValidationError(
+                    "Output boundary is set to 'defined', but no outputs were provided. "
+                    "Please specify expected output files or change output_boundary config to 'flexible'."
+                )
+        
         for out in outputs:
             validate_path(out, "output file")
 
@@ -200,47 +311,78 @@ class CellManager:
 
         cell_dir = self.cells_dir / cell_id
 
-        if cell_dir.exists():
-            raise CellAlreadyExistsError(f"Cell already exists: {cell_id}")
-
         # Verify path is within bounds
         if not validate_path_in_bounds(self.cells_dir, cell_dir):
             raise ValidationError(f"Cell directory outside allowed bounds: {cell_id}")
 
-        cell_dir.mkdir(parents=True)
+        # Use lock to prevent race conditions
+        creation_lock = CellCreationLock()
+        
+        if not creation_lock.acquire_cell_lock(cell_id, timeout=30.0):
+            raise CellManagerError(f"Failed to acquire lock for cell creation: {cell_id}")
+        
+        try:
+            # Double-check after acquiring lock
+            if cell_dir.exists():
+                raise CellAlreadyExistsError(f"Cell already exists: {cell_id}")
+            
+            # Atomic directory creation with retry
+            created = False
+            last_error = None
+            
+            for attempt in range(MAX_CREATION_RETRIES):
+                try:
+                    # Use exist_ok=False for atomic creation
+                    cell_dir.mkdir(parents=True, exist_ok=False)
+                    created = True
+                    break
+                except FileExistsError:
+                    # Another process created it
+                    raise CellAlreadyExistsError(f"Cell already exists: {cell_id}")
+                except OSError as e:
+                    last_error = e
+                    if attempt < MAX_CREATION_RETRIES - 1:
+                        time.sleep(RETRY_DELAY_SECONDS)
+                        continue
+            
+            if not created:
+                raise CellManagerError(f"Failed to create cell directory: {last_error}")
+            
+            # Create cell configuration
+            now = datetime.now(timezone.utc).isoformat()
+            cell_config: dict[str, Any] = {
+                "id": cell_id,
+                "description": description,
+                "inputs": inputs,
+                "outputs": outputs,
+                "dependencies": dependencies or [],
+                "status": "pending",
+                "created_at": now,
+                "updated_at": now,
+                "worktree_path": None,
+                "branch": None
+            }
 
-        # Create cell configuration
-        now = datetime.now(timezone.utc).isoformat()
-        cell_config: dict[str, Any] = {
-            "id": cell_id,
-            "description": description,
-            "inputs": inputs,
-            "outputs": outputs,
-            "dependencies": dependencies or [],
-            "status": "pending",
-            "created_at": now,
-            "updated_at": now,
-            "worktree_path": None,
-            "branch": None
-        }
+            # Create worktree if requested
+            if create_worktree:
+                try:
+                    worktree_path, branch = self._create_worktree(cell_id)
+                    cell_config["worktree_path"] = str(worktree_path)
+                    cell_config["branch"] = branch
+                except Exception as e:
+                    # Log warning but don't fail
+                    print(f"Warning: Failed to create worktree: {e}")
 
-        # Create worktree if requested
-        if create_worktree:
-            try:
-                worktree_path, branch = self._create_worktree(cell_id)
-                cell_config["worktree_path"] = str(worktree_path)
-                cell_config["branch"] = branch
-            except Exception as e:
-                # Log warning but don't fail
-                print(f"Warning: Failed to create worktree: {e}")
+            # Write configuration atomically
+            self._write_cell_config(cell_dir, cell_config)
 
-        # Write configuration atomically
-        self._write_cell_config(cell_dir, cell_config)
+            # Create context file
+            self._create_context_file(cell_dir, cell_id, inputs)
 
-        # Create context file
-        self._create_context_file(cell_dir, cell_id, inputs)
-
-        return cell_config
+            return cell_config
+            
+        finally:
+            creation_lock.release_cell_lock(cell_id)
 
     def _write_cell_config(self, cell_dir: Path, config: dict[str, Any]) -> None:
         """Write cell configuration atomically
