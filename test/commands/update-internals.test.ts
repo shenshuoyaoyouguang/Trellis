@@ -12,8 +12,10 @@ import path from "node:path";
 
 import {
   cleanupEmptyDirs,
+} from "../../src/commands/update/file-utils.js";
+import {
   sortMigrationsForExecution,
-} from "../../src/commands/update.js";
+} from "../../src/commands/update/migration-executor.js";
 
 // =============================================================================
 // cleanupEmptyDirs

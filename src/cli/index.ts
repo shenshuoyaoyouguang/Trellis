@@ -3,10 +3,11 @@ import path from "node:path";
 import chalk from "chalk";
 import { Command } from "commander";
 import { init } from "../commands/init.js";
-import { update } from "../commands/update.js";
+import { update } from "../commands/update/index.js";
 import { DIR_NAMES } from "../constants/paths.js";
 import { VERSION, PACKAGE_NAME } from "../constants/version.js";
 import { compareVersions } from "../utils/compare-versions.js";
+import { parseUpdateOptions } from "../utils/type-guards.js";
 
 // Re-export for backwards compatibility (consumers should prefer constants/version.js)
 export { VERSION, PACKAGE_NAME };
@@ -106,14 +107,7 @@ program
   .option("--migrate", "Apply pending file migrations (renames/deletions)")
   .action(async (options: Record<string, unknown>) => {
     try {
-      await update({
-        dryRun: options.dryRun as boolean,
-        force: options.force as boolean,
-        skipAll: options.skipAll as boolean,
-        createNew: options.createNew as boolean,
-        allowDowngrade: options.allowDowngrade as boolean,
-        migrate: options.migrate as boolean,
-      });
+      await update(parseUpdateOptions(options));
     } catch (error) {
       console.error(
         chalk.red("Error:"),

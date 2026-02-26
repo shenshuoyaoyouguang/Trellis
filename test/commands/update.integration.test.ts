@@ -27,7 +27,7 @@ vi.mock("node:child_process", () => ({
 // === Imports ===
 
 import { init } from "../../src/commands/init.js";
-import { update } from "../../src/commands/update.js";
+import { update } from "../../src/commands/update/index.js";
 import { VERSION } from "../../src/constants/version.js";
 import { DIR_NAMES, PATHS } from "../../src/constants/paths.js";
 import { computeHash } from "../../src/utils/template-hash.js";
