@@ -1,6 +1,6 @@
 ---
 name: finish-work
-description: "Finish Work - Pre-Commit Checklist"
+description: "完成工作 - 提交前检查清单"
 ---
 
 # Finish Work - Pre-Commit Checklist

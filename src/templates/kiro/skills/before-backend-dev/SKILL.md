@@ -1,6 +1,6 @@
 ---
 name: before-backend-dev
-description: "Read the backend development guidelines before starting your development task."
+description: "开始后端开发任务前阅读后端开发规范。"
 ---
 
 Read the backend development guidelines before starting your development task.

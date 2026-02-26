@@ -1,6 +1,6 @@
 ---
 name: update-spec
-description: "Update Code-Spec - Capture Executable Contracts"
+description: "更新代码规范 - 捕获可执行约定"
 ---
 
 # Update Code-Spec - Capture Executable Contracts

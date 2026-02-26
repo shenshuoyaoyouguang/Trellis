@@ -1,7 +1,7 @@
 ---
 name: debug
 description: |
-  Issue fixing expert. Understands issues, fixes against specs, and verifies fixes. Precise fixes only.
+  问题修复专家。理解问题、对照规范修复并验证修复结果。仅做精准修复。
 tools: Read, Write, Edit, Bash, Glob, Grep, mcp__exa__web_search_exa, mcp__exa__get_code_context_exa
 color: red
 ---

@@ -1,6 +1,6 @@
 ---
 description: |
-  Code quality check expert. Reviews code changes against specs and self-fixes issues.
+  代码质量检查专家。对照规范审查代码变更并自动修复问题。
 mode: subagent
 permission:
   read: allow

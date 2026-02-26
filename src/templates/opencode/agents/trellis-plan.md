@@ -1,6 +1,6 @@
 ---
 description: |
-  Multi-Agent Pipeline planner. Analyzes requirements and produces a fully configured task directory ready for dispatch.
+  多 Agent 管道规划器。分析需求并生成完整配置的任务目录供调度使用。
 mode: primary
 permission:
   read: allow

@@ -1,7 +1,7 @@
 ---
 name: implement
 description: |
-  Code implementation expert. Understands specs and requirements, then implements features. No git commit allowed.
+  代码实现专家。理解规范和需求后实现功能。禁止 git commit 操作。
 tools: Read, Write, Edit, Bash, Glob, Grep, mcp__exa__web_search_exa, mcp__exa__get_code_context_exa
 color: green
 ---

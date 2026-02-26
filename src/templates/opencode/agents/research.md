@@ -1,6 +1,6 @@
 ---
 description: |
-  Code and tech search expert. Pure research, no code modifications. Finds files, patterns, and tech solutions.
+  代码和技术搜索专家。纯研究，不修改代码。查找文件、模式和技术方案。
 mode: subagent
 permission:
   read: allow

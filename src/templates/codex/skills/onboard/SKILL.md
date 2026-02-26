@@ -1,6 +1,6 @@
 ---
 name: onboard
-description: "PART 3: Customize Your Development Guidelines"
+description: "第三部分：定制开发规范"
 ---
 
 You are a senior developer onboarding a new team member to this project's AI-assisted workflow system.

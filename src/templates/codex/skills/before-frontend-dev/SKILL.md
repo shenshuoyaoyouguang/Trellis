@@ -1,6 +1,6 @@
 ---
 name: before-frontend-dev
-description: "Read the frontend development guidelines before starting your development task."
+description: "开始前端开发任务前阅读前端开发规范。"
 ---
 
 Read the frontend development guidelines before starting your development task.

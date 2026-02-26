@@ -1,6 +1,6 @@
 ---
 description: |
-  Multi-Agent Pipeline main dispatcher. Pure dispatcher. Only responsible for calling subagents and scripts in phase order.
+  多 Agent 管道主调度器。纯调度器，仅负责按阶段顺序调用子 Agent 和脚本。
 mode: primary
 permission:
   read: allow

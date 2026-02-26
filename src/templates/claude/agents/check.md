@@ -1,7 +1,7 @@
 ---
 name: check
 description: |
-  Code quality check expert. Reviews code changes against specs and self-fixes issues.
+  代码质量检查专家。对照规范审查代码变更并自动修复问题。
 tools: Read, Write, Edit, Bash, Glob, Grep, mcp__exa__web_search_exa, mcp__exa__get_code_context_exa
 model: opus
 ---

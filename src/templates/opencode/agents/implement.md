@@ -1,6 +1,6 @@
 ---
 description: |
-  Code implementation expert. Understands specs and requirements, then implements features. No git commit allowed.
+  代码实现专家。理解规范和需求后实现功能。禁止 git commit 操作。
 mode: subagent
 permission:
   read: allow

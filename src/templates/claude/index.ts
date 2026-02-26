@@ -12,7 +12,7 @@
  *   └── settings.json   # Settings configuration
  */
 
-import { readdirSync, readFileSync } from "node:fs";
+import { readdirSync, readFileSync, statSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -25,7 +25,16 @@ function readTemplate(relativePath: string): string {
 
 function listFiles(dir: string): string[] {
   try {
-    return readdirSync(join(__dirname, dir));
+    const entries = readdirSync(join(__dirname, dir));
+    // Filter out directories, only return files
+    return entries.filter((entry) => {
+      const fullPath = join(__dirname, dir, entry);
+      try {
+        return statSync(fullPath).isFile();
+      } catch {
+        return false;
+      }
+    });
   } catch {
     return [];
   }

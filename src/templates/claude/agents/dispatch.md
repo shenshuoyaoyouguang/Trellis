@@ -1,7 +1,7 @@
 ---
 name: dispatch
 description: |
-  Multi-Agent Pipeline main dispatcher. Pure dispatcher. Only responsible for calling subagents and scripts in phase order.
+  多 Agent 管道主调度器。纯调度器，仅负责按阶段顺序调用子 Agent 和脚本。
 tools: Read, Bash, mcp__exa__web_search_exa, mcp__exa__get_code_context_exa
 model: opus
 ---

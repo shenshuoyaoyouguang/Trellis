@@ -1,6 +1,6 @@
 ---
 name: check-cross-layer
-description: "Cross-Layer Check"
+description: "跨层检查"
 ---
 
 # Cross-Layer Check

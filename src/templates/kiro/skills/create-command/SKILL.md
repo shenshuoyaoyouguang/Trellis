@@ -1,6 +1,6 @@
 ---
 name: create-command
-description: "Create New Skill"
+description: "创建新技能"
 ---
 
 # Create New Skill

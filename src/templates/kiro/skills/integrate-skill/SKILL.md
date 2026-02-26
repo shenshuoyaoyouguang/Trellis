@@ -1,6 +1,6 @@
 ---
 name: integrate-skill
-description: "Integrate Skill into Project Guidelines"
+description: "将技能集成到项目规范中"
 ---
 
 # Integrate Skill into Project Guidelines

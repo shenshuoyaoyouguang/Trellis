@@ -1,6 +1,6 @@
 ---
 name: check-backend
-description: "Check if the code you just wrote follows the backend development guidelines."
+description: "检查刚编写的代码是否遵循后端开发规范。"
 ---
 
 Check if the code you just wrote follows the backend development guidelines.

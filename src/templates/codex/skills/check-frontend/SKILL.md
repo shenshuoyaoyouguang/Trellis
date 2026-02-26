@@ -1,6 +1,6 @@
 ---
 name: check-frontend
-description: "Check if the code you just wrote follows the frontend development guidelines."
+description: "检查刚编写的代码是否遵循前端开发规范。"
 ---
 
 Check if the code you just wrote follows the frontend development guidelines.

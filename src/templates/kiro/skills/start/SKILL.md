@@ -1,6 +1,6 @@
 ---
 name: start
-description: "Start Session"
+description: "开始会话"
 ---
 
 # Start Session

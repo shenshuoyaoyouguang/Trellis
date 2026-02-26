@@ -1,8 +1,7 @@
 ---
 name: hive-queen
 description: |
-  Central orchestrator for Hive concurrent agent mode. Responsible for task decomposition,
-  resource allocation, worker dispatch, and consensus coordination.
+  蜂巢并发代理模式的中央协调器。负责任务分解、资源分配、工蜂调度和共识协调。
 tools: Read, Bash, Glob, Grep, Task
 color: purple
 ---

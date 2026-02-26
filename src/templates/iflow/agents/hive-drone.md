@@ -1,8 +1,7 @@
 ---
 name: hive-drone
 description: |
-  Independent validator in Hive concurrent agent mode. Performs multi-dimensional
-  cross-validation including technical, strategic, and security checks.
+  蜂巢并发代理模式的独立验证者。执行技术、战略和安全等多维度交叉验证。
 tools: Read, Bash, Glob, Grep
 color: yellow
 ---

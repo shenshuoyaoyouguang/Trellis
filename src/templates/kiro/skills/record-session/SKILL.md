@@ -1,6 +1,6 @@
 ---
 name: record-session
-description: "Method 1: Simple parameters"
+description: "记录会话到日志"
 ---
 
 [!] **Prerequisite**: This skill should only be used AFTER the human has tested and committed the code.

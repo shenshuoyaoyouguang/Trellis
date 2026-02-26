@@ -215,8 +215,10 @@ const EXCLUDE_FROM_HASH = [
  * Check if a path should be excluded from hash tracking
  */
 function shouldExcludeFromHash(relativePath: string): boolean {
+  // Normalize Windows backslashes to forward slashes for consistent matching
+  const normalized = relativePath.replace(/\\/g, "/");
   for (const pattern of EXCLUDE_FROM_HASH) {
-    if (relativePath.includes(pattern)) {
+    if (normalized.includes(pattern)) {
       return true;
     }
   }
@@ -277,7 +279,9 @@ export function initializeHashes(cwd: string): number {
       const fullPath = path.join(cwd, relativePath);
       try {
         const content = fs.readFileSync(fullPath, "utf-8");
-        hashes[relativePath] = computeHash(content);
+        // Normalize path separators for consistent keys across platforms
+        const normalizedPath = relativePath.replace(/\\/g, "/");
+        hashes[normalizedPath] = computeHash(content);
       } catch {
         // Skip files that can't be read (binary, etc.)
       }

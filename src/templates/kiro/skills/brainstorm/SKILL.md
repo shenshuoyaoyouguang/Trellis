@@ -1,6 +1,6 @@
 ---
 name: brainstorm
-description: "Brainstorm - Requirements Discovery (AI Coding Enhanced)"
+description: "头脑风暴 - 需求发现（AI 编码增强）"
 ---
 
 # Brainstorm - Requirements Discovery (AI Coding Enhanced)

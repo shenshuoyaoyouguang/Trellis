@@ -1,6 +1,6 @@
 ---
 name: break-loop
-description: "Break the Loop - Deep Bug Analysis"
+description: "打破循环 - 深度 Bug 分析"
 ---
 
 # Break the Loop - Deep Bug Analysis
