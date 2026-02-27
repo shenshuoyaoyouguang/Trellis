@@ -1,4 +1,4 @@
-import { execSync } from "node:child_process";
+import { spawnSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 import readline from "node:readline";
@@ -31,25 +31,33 @@ import {
   downloadTemplateById,
   type TemplateStrategy,
 } from "../utils/template-fetcher.js";
+import { sanitizeName, SanitizationError } from "../utils/sanitize.js";
+import { handleError } from "../utils/error-handler.js";
 
 /**
  * Detect available Python command (python3 or python)
  */
 function getPythonCommand(): string {
   // Try python3 first (preferred on macOS/Linux)
-  try {
-    execSync("python3 --version", { stdio: "pipe" });
+  const python3Result = spawnSync("python3", ["--version"], {
+    stdio: "pipe",
+    shell: false,
+  });
+  if (python3Result.status === 0 && python3Result.stdout) {
     return "python3";
-  } catch {
-    // Fall back to python (common on Windows)
-    try {
-      execSync("python --version", { stdio: "pipe" });
-      return "python";
-    } catch {
-      // Default to python3, let it fail with a clear error
-      return "python3";
-    }
   }
+
+  // Fall back to python (common on Windows)
+  const pythonResult = spawnSync("python", ["--version"], {
+    stdio: "pipe",
+    shell: false,
+  });
+  if (pythonResult.status === 0 && pythonResult.stdout) {
+    return "python";
+  }
+
+  // Default to python3, let it fail with a clear error
+  return "python3";
 }
 
 // =============================================================================
@@ -323,7 +331,11 @@ function createBootstrapTask(
     fs.writeFileSync(currentTaskFile, taskRelativePath, "utf-8");
 
     return true;
-  } catch {
+  } catch (error) {
+    handleError(error, {
+      operation: "Creating bootstrap task",
+      severity: "silent",
+    });
     return false;
   }
 }
@@ -389,12 +401,21 @@ export async function init(options: InitOptions): Promise<void> {
     const isGitRepo = fs.existsSync(path.join(cwd, ".git"));
     if (isGitRepo) {
       try {
-        developerName = execSync("git config user.name", {
+        const result = spawnSync("git", ["config", "user.name"], {
           cwd,
           encoding: "utf-8",
-        }).trim();
-      } catch {
-        // Git not available or no user.name configured
+          stdio: "pipe",
+          shell: false,
+        });
+        if (result.status === 0 && result.stdout) {
+          developerName = result.stdout.trim();
+        }
+      } catch (error) {
+        // Git not available or no user.name configured - will ask user later
+        handleError(error, {
+          operation: "Reading git config user.name",
+          severity: "silent",
+        });
       }
     }
   }
@@ -616,20 +637,45 @@ export async function init(options: InitOptions): Promise<void> {
     );
   }
 
-  // Initialize developer identity (silent - no output)
+  // Initialize developer identity with safe input handling
   if (developerName) {
     try {
+      // Validate and sanitize the developer name
+      const safeName = sanitizeName(developerName, "Developer name");
+
       const pythonCmd = getPythonCommand();
       const scriptPath = path.join(cwd, PATHS.SCRIPTS, "init_developer.py");
-      execSync(`${pythonCmd} "${scriptPath}" "${developerName}"`, {
+
+      // Use spawnSync with argument array (safe from command injection)
+      const result = spawnSync(pythonCmd, [scriptPath, safeName], {
         cwd,
-        stdio: "pipe", // Silent
+        stdio: "pipe",
+        shell: false, // Disable shell to prevent command injection
       });
 
+      if (result.status !== 0) {
+        const stderr = result.stderr?.toString() || "Unknown error";
+        throw new Error(stderr);
+      }
+
       // Create bootstrap task to guide user through filling guidelines
-      createBootstrapTask(cwd, developerName, projectType);
-    } catch {
-      // Silent failure - user can run init_developer.py manually
+      createBootstrapTask(cwd, safeName, projectType);
+    } catch (error) {
+      // Handle error with user-friendly message
+      if (error instanceof SanitizationError) {
+        handleError(error, {
+          operation: "Developer name validation",
+          severity: "warning",
+          userMessage: `Please use only letters, numbers, underscores, and hyphens.`,
+        });
+      } else {
+        handleError(error, {
+          operation: "Developer identity initialization",
+          severity: "warning",
+          userMessage:
+            "You can manually run: python .trellis/scripts/init_developer.py <name>",
+        });
+      }
     }
   }
 

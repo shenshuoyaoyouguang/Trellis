@@ -12,6 +12,7 @@ import path from "node:path";
 import { DIR_NAMES } from "../constants/paths.js";
 import { ALL_MANAGED_DIRS } from "../configurators/index.js";
 import type { TemplateHashes } from "../types/migration.js";
+import { handleError } from "./error-handler.js";
 
 /** File name for storing template hashes */
 const HASHES_FILE = ".template-hashes.json";
@@ -42,7 +43,12 @@ export function loadHashes(cwd: string): TemplateHashes {
   try {
     const content = fs.readFileSync(hashesPath, "utf-8");
     return JSON.parse(content) as TemplateHashes;
-  } catch {
+  } catch (error) {
+    // First-time initialization or corrupted file - return empty
+    handleError(error, {
+      operation: "Loading template hashes",
+      severity: "silent",
+    });
     return {};
   }
 }
@@ -282,8 +288,12 @@ export function initializeHashes(cwd: string): number {
         // Normalize path separators for consistent keys across platforms
         const normalizedPath = relativePath.replace(/\\/g, "/");
         hashes[normalizedPath] = computeHash(content);
-      } catch {
+      } catch (error) {
         // Skip files that can't be read (binary, etc.)
+        handleError(error, {
+          operation: `Reading file ${relativePath}`,
+          severity: "silent",
+        });
       }
     }
   }

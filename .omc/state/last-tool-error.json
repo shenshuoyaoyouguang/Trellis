@@ -1,0 +1,7 @@
+{
+  "tool_name": "mcp__plugin_oh-my-claudecode_t__ast_grep_search",
+  "tool_input_preview": "{\"pattern\":\"catch { $$$BODY }\",\"language\":\"typescript\",\"path\":\"D:\\\\AI\\\\Trellis\\\\src\"}",
+  "error": "MCP error -32000: Connection closed",
+  "timestamp": "2026-02-27T16:56:50.020Z",
+  "retry_count": 4
+}

@@ -1,0 +1,14 @@
+{
+  "permissions": {
+    "allow": [
+      "mcp__plugin_oh-my-claudecode_t__ast_grep_search",
+      "Bash(cd \"D:\\\\AI\\\\Trellis\" && python .trellis/scripts/hive/hive_config.py show 2>&1)",
+      "Bash(cd \"D:\\\\AI\\\\Trellis\" && python -m py_compile .trellis/scripts/hive/hive_config.py 2>&1)",
+      "Bash(cd \"D:\\\\AI\\\\Trellis\" && python -m py_compile src/templates/claude/hooks/hive-coordinator.py 2>&1)",
+      "Bash(cd \"D:\\\\AI\\\\Trellis\" && python -m py_compile .trellis/scripts/hive/cell_manager.py 2>&1)",
+      "Bash(git add:*)",
+      "Bash(gh pr:*)",
+      "Bash(head:*)"
+    ]
+  }
+}

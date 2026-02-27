@@ -1093,7 +1093,7 @@ def cmd_review_status(args: argparse.Namespace) -> int:
         print()
         print(colored("Comments:", Colors.CYAN))
         for c in comments:
-            print(f"  [{c.get('created_at', '')[:10]}] {c.get('author')}: {c.get('content')}")
+            print(f"  [{(c.get('created_at') or '')[:10]}] {c.get('author')}: {c.get('content')}")
             if c.get("file_path"):
                 loc = c["file_path"]
                 if c.get("line_number"):
@@ -1362,3 +1362,4 @@ def main() -> int:
 
 if __name__ == "__main__":
     sys.exit(main())
+

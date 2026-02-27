@@ -103,6 +103,29 @@ Hook will auto-inject:
 - check-frontend.md
 - All spec files from check.jsonl
 
+### action: "validate"
+
+This action runs multi-dimensional drone validation. Run it via Bash:
+
+```bash
+python3 ./.trellis/scripts/multi_agent/validate.py ${TASK_DIR} --cross-validate --drones 3 --update-task
+```
+
+Validation dimensions:
+- **Technical**: lint, typecheck, test
+- **Strategic**: requirements match, architecture consistency, risk assessment
+- **Security**: vulnerability scan, permission check, dependency audit
+
+Consensus mechanism:
+- 3 drones validate independently with different random seeds
+- Consensus threshold: 90/100
+- Max retries: 3 attempts
+
+If validation fails:
+1. Check the issues in the output
+2. If score < 80: Call debug agent to fix critical issues
+3. If score >= 80: Retry validation (may pass on retry)
+
 ### action: "debug"
 
 ```

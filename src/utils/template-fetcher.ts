@@ -10,6 +10,8 @@ import os from "node:os";
 import path from "node:path";
 import { downloadTemplate } from "giget";
 
+import { handleError } from "./error-handler.js";
+
 // =============================================================================
 // Constants
 // =============================================================================
@@ -63,8 +65,13 @@ export async function fetchTemplateIndex(): Promise<SpecTemplate[]> {
     }
     const index: TemplateIndex = (await res.json()) as TemplateIndex;
     return index.templates;
-  } catch {
+  } catch (error) {
     // Network error - return empty array, caller will fallback to blank
+    handleError(error, {
+      operation: "Fetching template index",
+      severity: "silent",
+      userMessage: "Using blank template as fallback",
+    });
     return [];
   }
 }

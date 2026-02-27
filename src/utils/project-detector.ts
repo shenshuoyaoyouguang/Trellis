@@ -1,6 +1,8 @@
 import fs from "node:fs";
 import path from "node:path";
 
+import { handleError } from "./error-handler.js";
+
 /**
  * Project type detected by analyzing project files
  */
@@ -125,7 +127,12 @@ function fileExists(cwd: string, filename: string): boolean {
         "^" + pattern.replace(/\*/g, ".*").replace(/\./g, "\\.") + "$",
       );
       return files.some((f) => regex.test(f));
-    } catch {
+    } catch (error) {
+      // Directory doesn't exist or can't be read - non-critical
+      handleError(error, {
+        operation: "Directory scan for project indicators",
+        severity: "silent",
+      });
       return false;
     }
   }
@@ -160,7 +167,12 @@ function checkPackageJson(cwd: string): {
     const hasBackend = BACKEND_DEPS.some((dep) => depNames.includes(dep));
 
     return { hasFrontend, hasBackend };
-  } catch {
+  } catch (error) {
+    // JSON parse error or file read error - return defaults with warning
+    handleError(error, {
+      operation: "Package.json parsing",
+      severity: "silent",
+    });
     return { hasFrontend: false, hasBackend: false };
   }
 }

@@ -21,6 +21,7 @@ vi.mock("inquirer", () => ({
 }));
 
 vi.mock("node:child_process", () => ({
+  spawnSync: vi.fn().mockReturnValue({ status: 0, stdout: "", stderr: "" }),
   execSync: vi.fn().mockReturnValue(""),
 }));
 
@@ -29,7 +30,7 @@ vi.mock("node:child_process", () => ({
 import { init } from "../../src/commands/init.js";
 import { VERSION } from "../../src/constants/version.js";
 import { DIR_NAMES, PATHS } from "../../src/constants/paths.js";
-import { execSync } from "node:child_process";
+import { spawnSync } from "node:child_process";
 
 // eslint-disable-next-line @typescript-eslint/no-empty-function
 const noop = () => {};
@@ -42,7 +43,7 @@ describe("init() integration", () => {
     vi.spyOn(process, "cwd").mockReturnValue(tmpDir);
     vi.spyOn(console, "log").mockImplementation(noop);
     vi.spyOn(console, "error").mockImplementation(noop);
-    vi.mocked(execSync).mockClear();
+    vi.mocked(spawnSync).mockClear();
   });
 
   afterEach(() => {
@@ -161,12 +162,17 @@ describe("init() integration", () => {
   it("#7 passes developer name to init_developer script", async () => {
     await init({ yes: true, user: "testdev" });
 
-    const calls = vi.mocked(execSync).mock.calls;
+    const calls = vi.mocked(spawnSync).mock.calls;
     const match = calls.find(
-      ([cmd]) => typeof cmd === "string" && cmd.includes("init_developer.py"),
+      ([cmd, args]) => 
+        typeof cmd === "string" && 
+        Array.isArray(args) && 
+        args.some((arg: string) => arg.includes("init_developer.py")),
     );
     expect(match).toBeDefined();
-    expect(String((match as [unknown])[0])).toContain('"testdev"');
+    // spawnSync uses args array, check for developer name in args
+    const args = (match as [string, string[]])[1];
+    expect(args).toContain("testdev");
   });
 
   it("#8 writes correct version file", async () => {
